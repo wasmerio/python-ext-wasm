@@ -2,9 +2,10 @@ use crate::{errors::to_py_err, wasmer_inner::wasmer};
 use pyo3::{
     class::buffer::PyBufferProtocol,
     exceptions::PyBufferError,
-    ffi::{PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, PyBUF_WRITABLE, Py_buffer},
+    ffi::{PyBUF_FORMAT, PyBUF_ND, PyBUF_STRIDES, Py_IncRef, Py_buffer},
     prelude::*,
     pycell::PyRefMut,
+    AsPyPointer,
 };
 use std::{
     ffi::{c_void, CStr},
@@ -97,7 +98,11 @@ impl PyBufferProtocol for Buffer {
             // wrapped by `PyMemoryView_FromBuffer()` or
             // `PyBuffer_FillInfo()` this field is `NULL`. In general,
             // exporting objects MUST NOT use this scheme.
-            (*view).obj = ptr::null_mut();
+            //
+            // Step 3 bf_getbuffer: Set view->obj to exporter and increment
+            // view->obj.
+            (*view).obj = slf.as_ptr();
+            Py_IncRef((*view).obj);
 
             // `product(shape) * itemsize`. For contiguous arrays,
             // this is the length of the underlying memory block. For
@@ -113,11 +118,16 @@ impl PyBufferProtocol for Buffer {
 
             // An indicator of whether the buffer is read-only. This
             // field is controlled by the `PyBUF_WRITABLE` flag.
-            (*view).readonly = if PyBUF_WRITABLE == (flags & PyBUF_WRITABLE) {
-                0
-            } else {
-                1
-            };
+            //
+            // PyBUF_WRITABLE Controls the readonly field. If set, the
+            // exporter MUST provide a writable buffer or else report
+            // failure. Otherwise, the exporter MAY provide either a
+            // read-only or writable buffer, but the choice MUST be
+            // consistent for all consumers.
+            //
+            // IMPL NOTE: always provide a writable buffer, requests
+            // are allowed to still interpret it as readonly.
+            (*view).readonly = 0;
 
             // Item size in bytes of a single element. Same as the
             // value of `struct.calcsize()` called on non-`NULL`

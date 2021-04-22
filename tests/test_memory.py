@@ -1,4 +1,6 @@
 from wasmer import Instance, Module, Store, Memory, MemoryType, Buffer, Uint8Array, Int8Array, Uint16Array, Int16Array, Uint32Array, Int32Array
+import ctypes
+import gc
 import inspect
 import os
 import pytest
@@ -248,7 +250,7 @@ def test_memory_buffer_memoryview():
     memory_view = memoryview(memory.buffer)
 
     assert memory_view.nbytes == 1114112
-    assert memory_view.readonly == True
+    assert memory_view.readonly == False
     assert memory_view.format == 'B'
     assert memory_view.itemsize == 1
     assert memory_view.ndim == 1
@@ -279,3 +281,45 @@ def test_memory_buffer_bytearray():
     assert len(byte_array) == 1114112
     assert byte_array[0:3] == b'\x01\x02\x03'
     assert byte_array[3:9].decode() == 'Wasmer'
+
+def test_memory_buffer_supports_ctypes():
+    c_uint8_4 = ctypes.c_uint8 * 4
+
+    memory = instance().exports.memory
+
+    arr = c_uint8_4.from_buffer(memory.buffer)
+    arr[0] = 0b00000001
+    arr[1] = 0b00000100
+    arr[2] = 0b00010000
+    arr[3] = 0b01000000
+
+    byte_array = bytearray(memory.buffer)
+    assert byte_array[0] == 0b00000001
+    assert byte_array[1] == 0b00000100
+    assert byte_array[2] == 0b00010000
+    assert byte_array[3] == 0b01000000
+
+def test_memory_buffer_supports_keeps_object_alive():
+    """Overwrites a buffer's memory to segfault for incorrect ownership.
+
+    The buffer protocol requires the buffer view to keep the owner of the
+    memory ("buffer" in the example below) alive while the buffer is accessed.
+    The memoryview object only stores the buffer view and does not keep an
+    extra reference to the owner (in contrast to numpy arrays). Hence it relies
+    on correct use of the buffer protocol.
+
+    In case of incorrect ownership semantics, the write operation below would
+    write into free'd memory. Depending on architecture, this operation will
+    lead to a segfault.
+    """
+    buffer = instance().exports.memory.buffer
+    view = memoryview(buffer)
+
+    # delete the buffer and call the GC to force the buffer view held inside
+    # the view object to be the only reference to the buffer object
+    del buffer
+    gc.collect()
+
+    val = bytes([42] * 1024)
+    for i in range(len(view) // 1024):
+        view[i * 1024:(i + 1) * 1024] = val
