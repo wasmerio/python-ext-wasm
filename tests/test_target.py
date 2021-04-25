@@ -43,7 +43,7 @@ def test_target_with_default_cpu_features():
     triple = target.Triple.host()
     target_ = target.Target(triple)
 
-@pytest.mark.skip(reason = 'CI does not have `gcc` or `clang` installed for the moment. It will be resolved once LLVM is installed.')
+@pytest.mark.skipif(platform.system() == 'Windows', reason = '`clang` is not found on the CI for the moment')
 def test_cross_compilation_roundtrip():
     triple = target.Triple('x86_64-linux-musl')
     cpu_features = target.CpuFeatures()

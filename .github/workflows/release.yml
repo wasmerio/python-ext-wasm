@@ -77,7 +77,6 @@ jobs:
           pyenv install --skip-existing "$(cat .python-version)"
 
       - name: Set up LLVM for `wasmer_compiler_llvm`
-        if: matrix.target.id != 'windows-amd64' # This is disabled in the `just` file, skip it to save data.
         shell: bash
         run: |
           curl --proto '=https' --tlsv1.2 -sSfL ${{ matrix.target.llvm-archive-url }} -o llvm.tar.gz

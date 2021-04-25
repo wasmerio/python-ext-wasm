@@ -26,7 +26,7 @@ use std::{
 /// [buffer-protocol]: https://docs.python.org/3/c-api/buffer.html
 /// [bytes]: https://docs.python.org/3/library/stdtypes.html#bytes
 /// [bytearray]: https://docs.python.org/3/library/stdtypes.html#bytearray
-/// [memoryview]: https://docs.python.org/3/library/stdtypes.html?#memoryview
+/// [memoryview]: https://docs.python.org/3/library/stdtypes.html#memoryview
 ///
 /// ## Example
 ///

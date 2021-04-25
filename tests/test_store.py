@@ -1,4 +1,4 @@
-from wasmer import engine, Store, Module, Instance
+from wasmer import engine, target, Store, Module, Instance
 import itertools
 import os
 import platform
@@ -13,39 +13,60 @@ def test_store_defaults():
     assert store.engine_name == 'jit'
     assert store.compiler_name == 'cranelift'
 
-#@pytest.mark.skipif(platform.system() == 'Windows', reason='Wasmer (`master`) has some troubles with JIT on Windows for the moment.')
-#def test_store_with_various_engines_and_compilers():
-#    import wasmer_compiler_llvm
-#
-#    engines = [
-#        engine.JIT,
-#        engine.Native
-#    ]
-#    compilers = [
-#        None,
-#        wasmer_compiler_cranelift.Compiler,
-#        wasmer_compiler_llvm.Compiler,
-#        wasmer_compiler_singlepass.Compiler
-#    ]
-#    results = [
-#        ('jit', None),
-#        ('jit', 'cranelift'),
-#        ('jit', 'llvm'),
-#        ('jit', 'singlepass'),
-#        ('native', None),
-#        ('native', 'cranelift'),
-#        ('native', 'llvm'),
-#        ('native', 'singlepass'),
-#    ]
-#
-#    for ((engine_, compiler), expected) in itertools.zip_longest(itertools.product(engines, compilers), results):
-#        store = Store(engine_(compiler))
-#
-#        assert store.engine_name == expected[0]
-#        assert store.compiler_name == expected[1]
-#
-#        if compiler != None:
-#            module = Module(store, TEST_BYTES)
-#            instance = Instance(module)
-#
-#            assert instance.exports.sum(1, 2)
+@pytest.mark.skipif(platform.system() == 'Windows', reason = 'temp')
+def test_store_with_various_engines_and_compilers():
+    host_triple = target.Triple.host()
+    is_aarch64 = host_triple.architecture == 'aarch64'
+    exclude_native = is_aarch64
+    
+    compilers = [None]
+    engines = [
+        engine.JIT,
+        engine.Native
+    ]
+    results = [
+        (None, 'jit'),
+        (None, 'native'),
+    ]
+
+    try:
+        import wasmer_compiler_cranelift
+
+        compilers.append(wasmer_compiler_cranelift.Compiler)
+        results.append(('cranelift', 'jit'))
+        results.append(('cranelift', 'native'))
+    except ImportError:
+        pass
+
+    try:
+        import wasmer_compiler_llvm
+
+        compilers.append(wasmer_compiler_llvm.Compiler)
+        results.append(('llvm', 'jit'))
+        results.append(('llvm', 'native'))
+    except ImportError:
+        pass
+
+    try:
+        import wasmer_compiler_singlepass
+
+        compilers.append(wasmer_compiler_singlepass.Compiler)
+        results.append(('singlepass', 'jit'))
+        results.append(('singlepass', 'native'))
+    except ImportError:
+        pass
+
+    for ((compiler, engine_), expected) in itertools.zip_longest(itertools.product(compilers, engines), results):
+        if exclude_native and engine_ == engine.Native:
+            continue
+
+        store = Store(engine_(compiler))
+
+        assert store.compiler_name == expected[0]
+        assert store.engine_name == expected[1]
+
+        if compiler != None:
+            module = Module(store, TEST_BYTES)
+            instance = Instance(module)
+
+            assert instance.exports.sum(1, 2)
