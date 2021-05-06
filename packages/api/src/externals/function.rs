@@ -165,14 +165,14 @@ impl Function {
                         wasmer::RuntimeError::new(io::Error::from(error).to_string())
                     })?;
 
-                let result_types = environment.result_types.clone();
+                let result_types = &environment.result_types;
                 let has_result_types = !result_types.is_empty();
 
                 Ok(if let Ok(results) = results.cast_as::<PyTuple>(py) {
                     results
                         .iter()
                         .zip(result_types)
-                        .map(to_wasm_value)
+                        .map(|(value, ty)| to_wasm_value((value, *ty)))
                         .collect::<PyResult<_>>()
                         .map_err(|error| {
                             wasmer::RuntimeError::new(io::Error::from(error).to_string())
@@ -205,8 +205,8 @@ impl Function {
     fn __call__<'p>(&self, py: Python<'p>, arguments: &PyTuple) -> PyResult<PyObject> {
         let arguments: Vec<wasmer::Value> = arguments
             .iter()
-            .zip(self.inner.ty().params().iter().cloned())
-            .map(to_wasm_value)
+            .zip(self.inner.ty().params())
+            .map(|(value, ty)| to_wasm_value((value, *ty)))
             .collect::<PyResult<_>>()?;
 
         let results = self
